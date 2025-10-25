@@ -29,15 +29,24 @@ taskrow.innerHTML = `
   * Manage view with list of tasks
   */
 class TaskList extends HTMLElement {
+    #shadow;
+    #container;
+    #table = null;
+    #tbody = null;
+    #allstatuses;
+    #changeStatusCallback;
+    #deleteTaskCallback;
 
     constructor() {
         super();
 
-          this.appendChild(template.content.cloneNode(true));
-          this.container = this.querySelector("#tasklist");
-          this.allstatuses = [];
-          this.changeStatusCallback = null;
-          this.deleteTaskCallback = null;
+        this.#shadow = this.attachShadow({mode: "closed"});
+
+        this.#shadow.appendChild(template.content.cloneNode(true));
+        this.#container = this.#shadow.querySelector("#tasklist");
+        this.#allstatuses = [];
+        this.#changeStatusCallback = null;
+        this.#deleteTaskCallback = null;
     }
 
     /**
@@ -45,7 +54,19 @@ class TaskList extends HTMLElement {
      * @param {Array} list with all possible task statuses
      */
     setStatuseslist(allstatuses) {
-        this.allstatuses = allstatuses;
+        this.#allstatuses = Array.isArray(allstatuses) ? allstatuses : [];
+        if(this.#tbody === null) return;
+
+        for (const row in this.#tbody.querySelectorAll("tr[task-id]")) {
+            const select = row.querySelector('select');
+            const current = row.querySelectorAll('td')[1]?.textContent ?? '';
+
+            select.replaceChildren(new Option('<Modify>', '0', true, current === ''));
+
+            for (const s of this.#allstatuses) {
+                select.appendChild(new Option(s, s, false, s===current));
+            }
+        }
     }
 
     /**
@@ -54,7 +75,7 @@ class TaskList extends HTMLElement {
      * @param {function} callback
      */
     addChangestatusCallback(callback) {
-        this.changeStatusCallback = callback;
+        this.#changeStatusCallback = callback;
     }
 
     /**
@@ -63,7 +84,7 @@ class TaskList extends HTMLElement {
      * @param {function} callback
      */
     addDeletetaskCallback(callback) {
-        this.deleteTaskCallback = callback;
+        this.#deleteTaskCallback = callback;
     }
 
     /**
@@ -72,36 +93,42 @@ class TaskList extends HTMLElement {
      * @param {Object} task - Object representing a task
      */
     showTask(task) {
-        if (!this.table) {
-            this.container.appendChild(tasktable.content.cloneNode(true));
-            this.table = this.container.querySelector("table");
-            this.tbody = this.table.querySelector("tbody");
+        if (this.#table === null) {
+            this.#container.appendChild(tasktable.content.cloneNode(true));
+            this.#table = this.#container.querySelector("table");
+            this.#tbody = this.#table.querySelector("tbody");
         }
-        const rowFrag = taskrow.content.cloneNode(true);
-        const row = rowFrag.querySelector("tr");
-        const tds = row.getElementsByTagName('td');
+        const row = taskrow.content.firstElementChild.cloneNode(true);
+        row.setAttribute('task-id', task.id);
+
+        const tds = row.getElementsByTagName('td'); //not using row.cells because i wanna skip table headers if any
         const select = row.querySelector('select');
-        row.setAttribute("task-id", task.id);
-
-        select.addEventListener("change", () => {
-            console.log("select changed →", task.id, "new value:", select.value);
-            if (select.value === "0") return;
-            if (this.changeStatusCallback) {
-                this.changeStatusCallback({id: task.id, status: select.value});
-            }
-        });
-
-        const button = row.querySelector("button");
-        button.addEventListener("click", () => {
-            if (this.deleteTaskCallback) {
-                this.deleteTaskCallback({ id: task.id, title: task.title });
-            }
-        });
 
         tds[0].textContent = task.title;
         tds[1].textContent = task.status;
 
-        this.allstatuses.forEach(status => {
+        let oldStatus = task.status;
+        select.addEventListener("change", () => {
+            console.log("select changed →", task.id, "new value:", select.value);
+            if (select.value === "0") {
+                console.log('value='+select.value);
+                return
+            };
+
+            if (this.#changeStatusCallback !== null) {
+                this.#changeStatusCallback({id: task.id, status: select.value});
+            }
+            oldStatus = select.value;
+        });
+
+        const button = row.querySelector("button");
+        button.addEventListener("click", () => {
+            if (this.#deleteTaskCallback !== null) {
+                this.#deleteTaskCallback({ id: task.id, title: task.title });
+            }
+        });
+
+        this.#allstatuses.forEach(status => {
             const opt = document.createElement("option");
             opt.value = status;
             opt.textContent = status;
@@ -109,8 +136,8 @@ class TaskList extends HTMLElement {
             select.appendChild(opt);
         });
 
-        this.tbody.prepend(row);
-        this.updateCount();
+        this.#tbody.prepend(row);
+        this.#updateCount();
     }
 
 
@@ -120,8 +147,8 @@ class TaskList extends HTMLElement {
      */
     updateTask(task) {
         console.log("updateTask called with:", task);
-        const row = this.container.querySelector(`tr[task-id="${task.id}"]`);
-        if (!row) {
+        const row = this.#container.querySelector(`tr[task-id="${task.id}"]`);
+        if (row === null) {
             console.warn("updateTask: no row found for", task.id);
             return;
         }
@@ -137,20 +164,20 @@ class TaskList extends HTMLElement {
      * @param {Integer} task - ID of task to remove
      */
     removeTask(id) {
-        const row = this.container.querySelector(`tr[task-id="${id}"]`);
-        if (row) {
+        const row = this.#container.querySelector(`tr[task-id="${id}"]`);
+        if (row !== null) {
             row.remove();
         }
 
         if (this.getNumtasks() <= 0) {
-            this.container.innerHTML = "";
-            this.table = null;
-            this.tbody = null;
+            this.#container.innerHTML = "";
+            this.#table = null;
+            this.#tbody = null;
         }
-        this.updateCount();
+        this.#updateCount();
     }
 
-    updateCount() {
+    #updateCount() {
         const count = this.getNumtasks();
         this.dispatchEvent(new CustomEvent('countChange', {
             detail: {count},
@@ -163,7 +190,7 @@ class TaskList extends HTMLElement {
      * @return {Number} - Number of tasks on display in view
      */
     getNumtasks() {
-        return this.container.querySelectorAll("tr[task-id]").length;
+        return this.#container.querySelectorAll("tr[task-id]").length;
     }
 }
 customElements.define('task-list', TaskList);
