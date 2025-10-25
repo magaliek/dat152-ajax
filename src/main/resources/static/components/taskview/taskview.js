@@ -19,7 +19,7 @@ template.innerHTML = `
 `;
 
 class TaskView extends HTMLElement {
-    #shadow; #msg; #list; #base; #box;
+    #shadow; #msg; #list; #base; #box; #btn;
 
     constructor() {
         super();
@@ -29,11 +29,17 @@ class TaskView extends HTMLElement {
         this.#list = this.#shadow.querySelector("task-list");
         this.#base = this.getAttribute("data-serviceurl");
         this.#box = this.#shadow.querySelector("task-box");
+        this.#btn = this.#shadow.querySelector("#newtask button");
+        this.#btn.disabled = true;
     }
 
     connectedCallback() {
         this.#list.addEventListener('countChange', e => {
-            this.#msg.textContent = `Found ${e.detail.count} tasks.`;
+            const t = e.detail.lastTask;
+            this.#msg.textContent = `Found ${e.detail.count} tasks.\n`;
+            if (t !== null) {
+                this.#msg.textContent += `added ${t.title}`;
+            }
         });
         this.init();
     }
@@ -55,6 +61,7 @@ class TaskView extends HTMLElement {
         this.#wireCallbacks();
         console.log("Loaded statuses:", statuses);
         console.log("Loaded tasks:", data.tasks);
+        this.#btn.disabled = false;
     }
 
     /**
@@ -98,8 +105,7 @@ class TaskView extends HTMLElement {
         });
 
         // Open the taskbox when the New Task button is clicked
-        const btn = this.#shadow.querySelector("#newtask button");
-        btn.addEventListener("click", () => this.#box.open());
+        this.#btn.addEventListener("click", () => this.#box.open());
 
         // When box submits, POST to backend and show the new task
         this.#box.onSubmit(async ({ title, status }) => {

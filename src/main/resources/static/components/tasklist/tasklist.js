@@ -66,6 +66,7 @@ class TaskList extends HTMLElement {
             for (const s of this.#allstatuses) {
                 select.appendChild(new Option(s, s, false, s===current));
             }
+            select.value = '0';
         }
     }
 
@@ -132,12 +133,12 @@ class TaskList extends HTMLElement {
             const opt = document.createElement("option");
             opt.value = status;
             opt.textContent = status;
-            if (task.status === status) opt.selected = true;
             select.appendChild(opt);
         });
+        select.value = '0';
 
         this.#tbody.prepend(row);
-        this.#updateCount();
+        this.#updateCount({lastTask: task});
     }
 
 
@@ -157,6 +158,7 @@ class TaskList extends HTMLElement {
 
         select.value = task.status;
         row.querySelectorAll("td")[1].textContent=task.status;
+        select.value = '0'; //come back
     }
 
     /**
@@ -177,10 +179,10 @@ class TaskList extends HTMLElement {
         this.#updateCount();
     }
 
-    #updateCount() {
+    #updateCount(task = {}) {
         const count = this.getNumtasks();
         this.dispatchEvent(new CustomEvent('countChange', {
-            detail: {count},
+            detail: {count, ...task},
             bubbles: true
         }));
     }
