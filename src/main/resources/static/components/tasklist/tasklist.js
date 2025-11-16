@@ -57,9 +57,9 @@ class TaskList extends HTMLElement {
         this.#allstatuses = Array.isArray(allstatuses) ? allstatuses : [];
         if(this.#tbody === null) return;
 
-        for (const row in this.#tbody.querySelectorAll("tr[task-id]")) {
+        for (const row of this.#tbody.rows) {
             const select = row.querySelector('select');
-            const current = row.querySelectorAll('td')[1]?.textContent ?? '';
+            const current = row.cells[1]?.textContent ?? '';
 
             select.replaceChildren(new Option('<Modify>', '0', true, current === ''));
 
@@ -97,33 +97,43 @@ class TaskList extends HTMLElement {
         if (this.#table === null) {
             this.#container.appendChild(tasktable.content.cloneNode(true));
             this.#table = this.#container.querySelector("table");
-            this.#tbody = this.#table.querySelector("tbody");
+            this.#tbody = this.#table.tBodies[0];
         }
         const row = taskrow.content.firstElementChild.cloneNode(true);
         row.setAttribute('task-id', task.id);
 
-        const tds = row.getElementsByTagName('td'); //not using row.cells because i wanna skip table headers if any
+        const tds = row.getElementsByTagName('td');
         const select = row.querySelector('select');
 
         tds[0].textContent = task.title;
         tds[1].textContent = task.status;
 
-        let oldStatus = task.status;
         select.addEventListener("change", () => {
-            console.log("select changed →", task.id, "new value:", select.value);
             if (select.value === "0") {
-                console.log('value='+select.value);
-                return
-            };
-
-            if (this.#changeStatusCallback !== null) {
-                this.#changeStatusCallback({id: task.id, status: select.value});
+                return;
             }
-            oldStatus = select.value;
+            const current = row.cells[1].textContent;
+            if (select.value === current) {
+                select.value = '0';
+                return;
+            }
+            const ok = window.confirm(`Change status of "${task.title}" from "${current}" to "${select.value}"?`);
+            if (ok === false) {
+                select.value = '0';
+                return;
+            }
+            if (this.#changeStatusCallback !== null) {
+                this.#changeStatusCallback({ id: task.id, status: select.value });
+            }
         });
 
         const button = row.querySelector("button");
         button.addEventListener("click", () => {
+            const ok = window.confirm(`Delete "${task.title}"?`);
+                if (ok === false) {
+                    return;
+                }
+
             if (this.#deleteTaskCallback !== null) {
                 this.#deleteTaskCallback({ id: task.id, title: task.title });
             }
@@ -138,7 +148,6 @@ class TaskList extends HTMLElement {
         select.value = '0';
 
         this.#tbody.prepend(row);
-        this.#updateCount({lastTask: task});
     }
 
 
@@ -148,7 +157,14 @@ class TaskList extends HTMLElement {
      */
     updateTask(task) {
         console.log("updateTask called with:", task);
-        const row = this.#container.querySelector(`tr[task-id="${task.id}"]`);
+        let row = null;
+        const rows = this.#tbody.rows;
+        for (const r of rows) {
+            if (r.getAttribute("task-id") == task.id) {
+                row = r;
+                break;
+            }
+        }
         if (row === null) {
             console.warn("updateTask: no row found for", task.id);
             return;
@@ -157,7 +173,7 @@ class TaskList extends HTMLElement {
         const select = row.querySelector("select");
 
         select.value = task.status;
-        row.querySelectorAll("td")[1].textContent=task.status;
+        row.cells[1].textContent=task.status;
         select.value = '0'; //come back
     }
 
@@ -166,25 +182,23 @@ class TaskList extends HTMLElement {
      * @param {Integer} task - ID of task to remove
      */
     removeTask(id) {
-        const row = this.#container.querySelector(`tr[task-id="${id}"]`);
+        let row = null;
+        const rows = this.#tbody.rows;
+        for (const r of rows) {
+            if (r.getAttribute("task-id") == id) {
+                row = r;
+                break;
+            }
+        }
         if (row !== null) {
             row.remove();
         }
 
         if (this.getNumtasks() <= 0) {
-            this.#container.innerHTML = "";
+            this.#container.textContent = "";
             this.#table = null;
             this.#tbody = null;
         }
-        this.#updateCount();
-    }
-
-    #updateCount(task = {}) {
-        const count = this.getNumtasks();
-        this.dispatchEvent(new CustomEvent('countChange', {
-            detail: {count, ...task},
-            bubbles: true
-        }));
     }
 
     /**
@@ -192,7 +206,8 @@ class TaskList extends HTMLElement {
      * @return {Number} - Number of tasks on display in view
      */
     getNumtasks() {
-        return this.#container.querySelectorAll("tr[task-id]").length;
+        return this.#tbody ? this.#tbody.rows.length : 0;
     }
 }
+
 customElements.define('task-list', TaskList);

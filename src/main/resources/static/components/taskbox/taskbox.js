@@ -1,24 +1,22 @@
-// TaskBox: simple modal-ish input for new tasks.
-// - Enter submits (if both fields filled)
-// - Esc closes and resets
-// - Parent calls: box.setStatuseslist([...]); box.#onSubmit(cb); box.open();
-
 const template = document.createElement("template");
 template.innerHTML = `
-  <link rel="stylesheet" type="text/css" href="${import.meta.url.match(/.*\//)[0]}/taskbox.css"/>
-  <div class="taskbox" hidden>
-    <label>
-      Title:
-      <input type="text" name="title" autocomplete="off">
-    </label>
-    <label>
-      Status:
-      <select name="status">
-        <!-- inject options here -->
-      </select>
-    </label>
-  </div>
+    <link rel="stylesheet" type="text/css"
+        href="${import.meta.url.match(/.*\//)[0]}/taskbox.css"/>
+    <dialog>
+       <!-- Modal content -->
+        <span>&times;</span>
+        <div>
+            <div>Title:</div>
+            <div>
+                <input type="text" size="25" maxlength="80"
+                    placeholder="Task title" autofocus/>
+            </div>
+            <div>Status:</div><div><select></select></div>
+        </div>
+        <p><button type="submit">Add task</button></p>
+    </dialog>
 `;
+
 
 class TaskBox extends HTMLElement {
     #root;
@@ -27,6 +25,7 @@ class TaskBox extends HTMLElement {
     #submitCallback;
     #onKeyDown;
     #shadow;
+    #btn;
 
     constructor() {
         super();
@@ -36,27 +35,25 @@ class TaskBox extends HTMLElement {
         this.#shadow.appendChild(template.content.cloneNode(true));
 
         // Cache refs
-        this.#root   = this.#shadow.querySelector(".taskbox");
-        this.#title  = this.#root.querySelector('input[name="title"]');
-        this.#status = this.#root.querySelector('select[name="status"]');
+        this.#root   = this.#shadow.querySelector("dialog");
+        this.#title  = this.#root.querySelector('input[type="text"]');
+        this.#status = this.#root.querySelector('select');
+        this.#btn = this.#root.querySelector("button[type='submit']");
 
         this.#submitCallback = null;
 
+        this.#btn.addEventListener("click", () => this.#submit());
+
         this.#onKeyDown = (e) => {
             if (e.key === "Enter") {
-                // only submit when we're inside the box
-                if (this.#root.contains(e.target)) {
-                    e.preventDefault();
-                    this.#submit();
-                }
+                e.preventDefault();
+                this.#submit();
             }
         };
         this.#root.addEventListener("keydown", this.#onKeyDown);
 
-        this.#status.addEventListener("change", () => {
-            if (this.#title.value.trim() && this.#status.value) {
-                this.#submit();
-            }
+        this.#shadow.querySelector("span").addEventListener("click", () => {
+            this.close();
         });
     }
 
@@ -86,8 +83,8 @@ class TaskBox extends HTMLElement {
     }
 
     /** Show the box and focus title */
-    open() {
-        this.#root.hidden = false;
+    show() {
+        this.#root.showModal();
         // Move focus after rendering tick
         queueMicrotask(() => {
             this.#title.focus();
@@ -97,10 +94,10 @@ class TaskBox extends HTMLElement {
 
     /** Hide the box and reset fields */
     close() {
-        this.#root.hidden = true;
+        this.#root.close();
         this.#title.value = "";
         // Reset to placeholder if present
-        if (this.#status.options.length) {
+        if (this.#status.options.length > 0) {
             this.#status.selectedIndex = 0;
         }
     }
@@ -109,9 +106,10 @@ class TaskBox extends HTMLElement {
      * Let parent register a submit callback
      * @param {(payload:{title:string,status:string})=>void} cb
      */
-    onSubmit(cb) {
+    addNewtaskCallback(cb) {
         this.#submitCallback = cb;
     }
+
 
     // Internal: gather values, validate, emit to parent, close
     #submit() {
@@ -119,7 +117,7 @@ class TaskBox extends HTMLElement {
         const status = this.#status.value;
 
         // Minimal validation
-        if (!title || !status) {
+        if (title.length === 0 || status.length === 0) {
             return;
         }
 
