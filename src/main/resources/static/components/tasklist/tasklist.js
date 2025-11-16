@@ -160,7 +160,7 @@ class TaskList extends HTMLElement {
         let row = null;
         const rows = this.#tbody.rows;
         for (const r of rows) {
-            if (r.getAttribute("task-id") == task.id) {
+            if (Number(r.getAttribute("task-id")) === task.id) {
                 row = r;
                 break;
             }
@@ -185,7 +185,7 @@ class TaskList extends HTMLElement {
         let row = null;
         const rows = this.#tbody.rows;
         for (const r of rows) {
-            if (r.getAttribute("task-id") == id) {
+            if (Number(r.getAttribute("task-id")) === id) {
                 row = r;
                 break;
             }
